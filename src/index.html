@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Topic and Keyword Trend Tool</title>
+  <style type = "text/css">
+    body {
+      font: normal 15px sans-serif;
+    }
+    path {
+      stroke-width: 1;
+      fill: none;
+    }
+    /*div {
+      border: 1px solid #cccccc;
+    }*/
+    #search_bar {
+      width: 1250px;
+      height: auto;
+      margin-bottom: 5px;
+    }
+    #query_buttons {
+      width: 1250px;
+      height: auto;
+    }
+    #topic_buttons {
+      width: 1250px;
+      height: auto;
+    }
+    #yaxis_scale_input_and_lineplot_wrapper {
+      margin-top: 5px;
+      margin-bottom: 5px;
+      width: 1250px;
+      height: 400px;
+    }
+    #yaxis_scale_input_div {
+      float: left;
+      height:400px;
+      width: 15px;
+    }
+    input.vertical {
+      -webkit-appearance: slider-vertical;
+      writing-mode: bt-lr;
+    }
+    #yaxis_scale_input {
+      height:390px;
+      width: 10px;
+    }
+    #lineplot_wrapper {
+      float: right;
+      width: 1230px;
+      height: 400px;
+    }
+    input.query {
+      border-radius: 5px;
+      padding: 4px 10px 4px 10px;
+    }
+    button {
+      border-radius: 5px;
+      padding: 4px 10px 4px 10px;
+    }
+    span {
+      background-color: black;
+      border-radius: 5px;
+      color: white;
+      font-family: sans-serif;
+      font-size: 11px;
+      font-weight: 100;
+      text-align: center;
+      opacity: 1;
+      margin: 1px;
+      padding: 4px 10px 4px 10px;
+      word-wrap: normal;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div id="topic_buttons"></div>
+  <div id="yaxis_scale_input_and_lineplot_wrapper">
+    <div id="yaxis_scale_input_div">
+      <input type="range" min="-100" max="-1" value = "-30" id="yaxis_scale_input" class="vertical" orient="vertical">
+    </div>
+    <div id="lineplot_wrapper"></div>
+  </div>
+  <div id="search_bar">
+    <div id="simple_query_div" style="margin-bottom: 3px">
+      <input type="text" id="simple_query_input" placeholder="javascript" class="query">
+      <button onclick="handleSimpleQuery()">Submit</button>
+    </div>
+    <div id="advanced_query_div">
+        ALL( ANY( <input type="text" id="input_1" class="query"> ),
+             ANY( <input type="text" id="input_2" class="query"> ) )
+        EXCEPT( ALL( ANY( <input type="text" id="input_3" class="query"> ),
+                    ANY( <input type="text" id="input_4" class="query"> ) ) )
+        <button onclick="handleAdvancedQuery()">Submit</button>
+    </div>
+  </div>
+  <div id="query_buttons"></div>
+
+  <script src="d3/d3.v4.min.js"></script>
+  <script>
+    var width_lineplot_with_margins = 1230,
+        height_lineplot_with_margins = 400,
+        margin = {top: 10, left: 35, right: 200, bottom: 20},
+        width_lineplot = width_lineplot_with_margins - margin.left - margin.right,
+        height_lineplot = height_lineplot_with_margins - margin.top - margin.bottom;
+
+    var x = d3.scaleTime().range([0, width_lineplot]),
+        y_lineplot = d3.scaleLinear().range([height_lineplot, 0]).domain([0, 0.3]);
+        z = d3.scaleOrdinal(d3.schemeCategory10);
+
+    var num_posts_in_quarter = [];
+    d3.csv("num_posts_in_quarter.csv", function(error, data) {
+      data.forEach(function(d) {
+        num_posts_in_quarter.push(d.num_posts_in_quarter);
+      });
+    });
+
+    var quarter_indices = [];
+    d3.csv("quarter_indices.csv", function(error, data) {
+     data.forEach(function(d) {
+       quarter_indices.push(d.quarter_indices);
+     });
+    });
+
+    var parseDate = d3.timeParse("%Y-%m");
+    var year_end_of_quarter_month = [];
+    d3.csv("year_end_of_quarter_month.csv", function(error, data) {
+      data.forEach(function(d) {
+        year_end_of_quarter_month.push(parseDate(d.date));
+      });
+      x.domain([year_end_of_quarter_month[0], year_end_of_quarter_month[year_end_of_quarter_month.length - 1]]);
+      lineplot_svg.append("g")
+        .attr("class", "axis axis--x")
+        .attr("transform", "translate(0," + height_lineplot + ")")
+        .call(d3.axisBottom(x));
+    });
+
+    var topic_labels = [];
+    d3.csv("Gibbs_LDA_Names.csv", function(error, data) {
+      data.forEach(function(d, i) {
+        topic_labels.push("T" + String(i) + ": " + d.Name);
+      });
+    });
+
+    var X;
+    d3.csv("X_binary.csv", function(error, data) {
+      X = data;
+      console.log("Ready");
+    });
+
+    var query_popularity_line = d3.line()
+                                  .curve(d3.curveBasis)
+                                  .x(function(d, i) {return x(year_end_of_quarter_month[i]); })
+                                  .y(function(d) {return y_lineplot(d); });
+
+    var lineplot_svg = d3.select("#lineplot_wrapper")
+                          .append("svg")
+                            .attr("width", width_lineplot_with_margins)
+                            .attr("height", height_lineplot_with_margins)
+                          .append("g")
+                            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    lineplot_svg.append("g")
+      .attr("id", "y_axis")
+      .attr("class", "axis axis--y")
+      .call(d3.axisLeft(y_lineplot).ticks(10, "%"));
+
+    var is_query_active = [];
+    var query_list = [];
+    var all_queries_quarterly_popularities = [];
+
+    function handleSimpleQuery() {
+      var query = d3.select("#simple_query_input").node().value.replace(/\s/g,'').toLowerCase();
+      document.getElementById('simple_query_input').value = "";
+      if (query == "") {
+        return false;
+      }
+      var query_index = query_list.length;
+      query_with_index = "Q" + String(query_index) + ": " + query;
+      query_list.push(query_with_index);
+      is_query_active.push(true);
+
+      d3.select("#query_buttons")
+          .append("span")
+          .attr("id", "query_button_"+query_index)
+          .on("click", function() {
+            toggleQueryDisplay(query_index);
+            d3.select("#query_button_"+String(query_index))
+              .style("background-color", is_query_active[query_index]? "teal": "black");
+          })
+          .style("background-color", is_query_active[query_index]? "teal": "black")
+          .text(query_with_index);
+
+      var input_type = "normal";
+      if(query.length >= 5) {
+        if(query.substring(0,4) == "any:") {
+          input_type = "any";
+        }
+        else if(query.substring(0,4) == "all:") {
+          input_type = "all";
+        }
+      }
+
+      var inputs_parsed = [];
+      if(input_type == "normal") {
+        inputs_parsed.push(query);
+      }
+      else {
+        inputs_parsed.push(query.substring(4).split(','));
+      }
+
+      var quarterly_popularity = [];
+      for(i=0; i<year_end_of_quarter_month.length; i++) {
+        count = 0;
+        for(j=quarter_indices[i]; j<quarter_indices[i+1]; j++) {
+          if(input_type == "normal") {
+            if(X[j][inputs_parsed[0]] > 0) {
+              count++;
+            }
+          }
+          else {
+            var conditional_count = 0;
+            for(itr=0; itr<inputs_parsed[0].length; itr++) {
+              conditional_count = conditional_count + X[j][inputs_parsed[0][itr]];
+            }
+            if(input_type == "any") {
+              if(conditional_count > 0) {
+                count++;
+              }
+            }
+            else if(input_type == "all") {
+              if(conditional_count == inputs_parsed.length) {
+                count++;
+              }
+            }
+          }
+        }
+        quarterly_popularity.push(count/num_posts_in_quarter[i]);
+      }
+
+      all_queries_quarterly_popularities.push(quarterly_popularity);
+      add_popularity_line_and_legend(true, query_with_index, quarterly_popularity, query_index);
+      return false;
+    }
+
+    function handleAdvancedQuery() {
+      inputs = [d3.select("#input_1").node().value.replace(/\s/g,'').toLowerCase(),
+                d3.select("#input_2").node().value.replace(/\s/g,'').toLowerCase(),
+                d3.select("#input_3").node().value.replace(/\s/g,'').toLowerCase(),
+                d3.select("#input_4").node().value.replace(/\s/g,'').toLowerCase()];
+
+      document.getElementById('input_1').value = "";
+      document.getElementById('input_2').value = "";
+      document.getElementById('input_3').value = "";
+      document.getElementById('input_4').value = "";
+
+      var query_index = query_list.length;
+      query = "ALL(ANY(" + inputs[0] + "), ANY(" + inputs[1] + ")) EXCEPT(ALL(ANY(" + inputs[2] + "), ANY(" + inputs[3] + ")))";
+      query_with_index = "Q" + String(query_index) + ": " + query;
+      query_list.push(query);
+      is_query_active.push(true);
+
+      d3.select("#query_buttons")
+          .append("span")
+          .attr("id", "query_button_"+String(query_index))
+          .on("click", function() {
+            toggleQueryDisplay(query_index);
+            d3.select("#query_button_"+String(query_index))
+              .style("background-color", is_query_active[query_index]? "teal": "black");
+          })
+          .style("background-color", is_query_active[query_index]? "teal": "black")
+          .text(query_with_index);
+
+      // parse the query
+      var inputs_parsed = [];
+      for(i=0;i<inputs.length;i++) {
+        inputs_split = inputs[i].split(',');
+        if(inputs_split[0] != "") {
+          inputs_parsed.push(inputs[i].split(','));
+        }
+        else{
+          inputs_parsed.push([]);
+        }
+      }
+
+      var quarterly_popularity = [];
+      for(i=0; i<year_end_of_quarter_month.length; i++) {
+        count = 0;
+        for(j=quarter_indices[i]; j<quarter_indices[i+1]; j++) {
+          var count1 = 0, count2 = 0, count3 = 0, count4 = 0;
+          // first any block
+          for(itr=0; itr<inputs_parsed[0].length; itr++) {
+            count1 = count1 + X[j][inputs_parsed[0][itr]];
+          }
+          // second any block
+          for(itr=0; itr<inputs_parsed[1].length; itr++) {
+            count2 = count2 + X[j][inputs_parsed[1][itr]];
+          }
+          // third any block
+          for(itr=0; itr<inputs_parsed[2].length; itr++) {
+            count3 = count3 + X[j][inputs_parsed[2][itr]];
+          }
+          // fourth any block
+          for(itr=0; itr<inputs_parsed[3].length; itr++) {
+            count4 = count4 + X[j][inputs_parsed[3][itr]];
+          }
+          input_1_satisfied = inputs_parsed[0].length ? (count1 > 0) : true;
+          input_2_satisfied = inputs_parsed[1].length ? (count2 > 0) : true;
+          input_3_satisfied = inputs_parsed[2].length ? (count3 == 0) : true;
+          input_4_satisfied = inputs_parsed[3].length ? (count4 == 0) : true;
+          if((input_1_satisfied && input_2_satisfied) && (input_3_satisfied && input_4_satisfied)) {
+            count++;
+          }
+        }
+        quarterly_popularity.push(count/num_posts_in_quarter[i]);
+      }
+
+      all_queries_quarterly_popularities.push(quarterly_popularity);
+      add_popularity_line_and_legend(false, null, quarterly_popularity, query_index);
+      return false;
+    }
+
+    var topic_popularity_line = d3.line()
+      .curve(d3.curveBasis)
+      .x(function(d) { return x(d.date); })
+      .y(function(d) { return y_lineplot(d.value); });
+
+    var is_topic_active = Array(40).fill(false);
+    var dataNest;
+
+    d3.csv("pot_lda_quarterly_melted_no_labels.csv", function(error, data) {
+        data.forEach(function(d) {
+          d.date = parseDate(d.date);
+          d.value = +d.value;
+        });
+
+        dataNest = d3.nest()
+            .key(function(d) {return d.variable;})
+            .entries(data);
+
+        dataNest.forEach(function(d,i) {
+          d3.select("#topic_buttons")
+              .append("span")
+              .attr("id", "topic_button_"+String(i))
+              .on("click", function() {
+                toggleTopicDisplay(d,i);
+                d3.select("#topic_button_"+String(i))
+                  .style("background-color", is_topic_active[i]? "teal": "black");
+              })
+              .style("background-color", is_topic_active[i]? "teal": "black")
+              .text(topic_labels[i]);
+
+          lineplot_svg.append("path")
+              .attr("class", "line")
+              .attr("id", 'topic_popularity_line_'+String(i))
+              .attr("d", topic_popularity_line(d.values))
+              .attr("opacity", 0)
+              .style("stroke", function() {
+                return z(i);
+              });
+
+          lineplot_svg.append("text")
+              .attr("id", "topic_legend_"+String(i))
+              .attr("x", (width_lineplot + 3))
+              .attr("y", y_lineplot(d.values[d.values.length - 1].value)+5)
+              .text(topic_labels[i])
+              .style("opacity", 0);
+        });
+    });
+
+    function add_popularity_line_and_legend(is_simple_query, query_with_index, quarterly_popularity, query_index) {
+      lineplot_svg.append("path")
+        .attr("id", "query_popularity_line_"+query_index)
+        .attr("d", query_popularity_line(quarterly_popularity))
+        .style("stroke", z(query_index));
+
+      lineplot_svg.append("text")
+        .attr("id", "query_legend_"+query_index)
+        .attr("x", (width_lineplot + 3))
+        .attr("y", y_lineplot(quarterly_popularity[quarterly_popularity.length - 1])+5)
+        .text( is_simple_query ? query_with_index : ("Q" + String(query_index)) );
+    }
+
+    function toggleQueryDisplay(i) {
+      var newOpacity = is_query_active[i] ? 0 : 1;
+      d3.select("#query_popularity_line_"+String(i))
+          .style("opacity", newOpacity);
+      d3.select("#query_legend_"+String(i))
+          .style("opacity", newOpacity);
+      is_query_active[i] = !is_query_active[i];
+    }
+
+    function toggleTopicDisplay(d, i){
+      var newOpacity = is_topic_active[i] ? 0 : 1;
+      d3.select("#topic_popularity_line_"+String(i))
+          .style("opacity", newOpacity);
+      d3.select("#topic_legend_"+String(i))
+          .style("opacity", newOpacity);
+      is_topic_active[i] = !is_topic_active[i];
+    }
+
+    d3.select("#yaxis_scale_input").on("input", function() {
+      y_lineplot.domain([0, -1*(+this.value)/100]);
+      d3.select("#y_axis")
+        .call(d3.axisLeft(y_lineplot).ticks(10, "%"));
+      // loop through all queries
+      for (i=0; i<query_list.length; i++) {
+        quarterly_popularity = all_queries_quarterly_popularities[i];
+        d3.select("#query_popularity_line_"+String(i))
+          .attr("d", query_popularity_line(quarterly_popularity));
+        d3.select("#query_legend_"+String(i))
+          .attr("y", y_lineplot(quarterly_popularity[quarterly_popularity.length - 1])+5);
+      }
+      // loop through all topics
+      dataNest.forEach(function(d,i) {
+        d3.select("#topic_popularity_line_"+String(i))
+          .attr("d", topic_popularity_line(d.values));
+        d3.select("#topic_legend_"+String(i))
+          .attr("y", y_lineplot(d.values[d.values.length - 1].value)+5);
+      });
+    });
+  </script>
+</body>
