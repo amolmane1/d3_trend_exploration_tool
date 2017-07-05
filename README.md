@@ -1,16 +1,20 @@
-# d3_trend_exploration_tool
+# D3 Trend Exploration Tool
 D3 app to explore trends in text data
 
+To demo the tool, click on [this link](http://htmlpreview.github.io/?https://github.com/amolmane1/d3_trend_exploration_tool/blob/master/src/index.html).
+
 This tool makes it easy to view the trends of:
-1) Topics 
+1) Topics (generated using Latent Dirichlet Allocation and manually labelled)
 2) Keywords
 3) Advanced Combinations of Keywords
+
+I've used [Ben Horowitz's](https://twitter.com/bhorowitz) tweets as my data to visualize. 
 
 Below is a screenshot of the tool. Regions 1,2, and 3 are where you can use the above functionalities:
 
 ![](images/index.png)
 
-To run the tool, open the terminal, navigate the to directory in which the tool exists (`reports/mvp/src/d3_viz`), and enter `python -m http.server <server-number> &`. The `server-number` can be any 4-digit number. I use `8880`. Then, open your web browser and in the search bar, enter `http://localhost:<server-number>/`. 
+If you missed it, to demo the tool, click on [this link](http://htmlpreview.github.io/?https://github.com/amolmane1/d3_trend_exploration_tool/blob/master/src/index.html).
 
 How to use the tool:
 #### 1) Looking up Topic Trends
