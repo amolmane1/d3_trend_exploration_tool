@@ -109,27 +109,27 @@
         y_lineplot = d3.scaleLinear().range([height_lineplot, 0]).domain([0, 0.3]);
         z = d3.scaleOrdinal(d3.schemeCategory10);
 
-    var num_posts_in_quarter = [];
-    d3.csv("num_posts_in_quarter.csv", function(error, data) {
+    var num_posts_in_month = [];
+    d3.csv("num_posts_in_month.csv", function(error, data) {
       data.forEach(function(d) {
-        num_posts_in_quarter.push(d.num_posts_in_quarter);
+        num_posts_in_month.push(d.num_posts_in_month);
       });
     });
 
-    var quarter_indices = [];
-    d3.csv("quarter_indices.csv", function(error, data) {
+    var month_indices = [];
+    d3.csv("month_indices.csv", function(error, data) {
      data.forEach(function(d) {
-       quarter_indices.push(d.quarter_indices);
+       month_indices.push(d.month_indices);
      });
     });
 
     var parseDate = d3.timeParse("%Y-%m");
-    var year_end_of_quarter_month = [];
-    d3.csv("year_end_of_quarter_month.csv", function(error, data) {
+    var year_month = [];
+    d3.csv("month_strings.csv", function(error, data) {
       data.forEach(function(d) {
-        year_end_of_quarter_month.push(parseDate(d.date));
+        year_month.push(parseDate(d.date));
       });
-      x.domain([year_end_of_quarter_month[0], year_end_of_quarter_month[year_end_of_quarter_month.length - 1]]);
+      x.domain([year_month[0], year_month[year_month.length - 1]]);
       lineplot_svg.append("g")
         .attr("class", "axis axis--x")
         .attr("transform", "translate(0," + height_lineplot + ")")
@@ -137,21 +137,30 @@
     });
 
     var topic_labels = [];
-    d3.csv("Gibbs_LDA_Names.csv", function(error, data) {
+    d3.csv("topic_names.csv", function(error, data) {
       data.forEach(function(d, i) {
-        topic_labels.push("T" + String(i) + ": " + d.Name);
+        topic_labels.push("T" + String(i) + ": " + d.name);
       });
     });
 
-    var X;
-    d3.csv("X_binary.csv", function(error, data) {
-      X = data;
+    // var X;
+    // d3.csv("X_binary.csv", function(error, data) {
+    //   X = data;
+    //   console.log("Ready");
+    // });
+
+    var tweets = [];
+    d3.csv("tweets.csv", function(error, data) {
+      // posts = data;
       console.log("Ready");
+      data.forEach(function(d, i) {
+        tweets.push(d.text.toLowerCase());
+      });
     });
 
     var query_popularity_line = d3.line()
                                   .curve(d3.curveBasis)
-                                  .x(function(d, i) {return x(year_end_of_quarter_month[i]); })
+                                  .x(function(d, i) {return x(year_month[i]); })
                                   .y(function(d) {return y_lineplot(d); });
 
     var lineplot_svg = d3.select("#lineplot_wrapper")
@@ -211,18 +220,21 @@
       }
 
       var quarterly_popularity = [];
-      for(i=0; i<year_end_of_quarter_month.length; i++) {
+      for(i=0; i<year_month.length; i++) {
         count = 0;
-        for(j=quarter_indices[i]; j<quarter_indices[i+1]; j++) {
+        for(j=month_indices[i]; j<month_indices[i+1]; j++) {
           if(input_type == "normal") {
-            if(X[j][inputs_parsed[0]] > 0) {
+            // if(X[j][inputs_parsed[0]] > 0) {
+            if(findWord(inputs_parsed[0], tweets[j])) {
               count++;
             }
           }
           else {
             var conditional_count = 0;
             for(itr=0; itr<inputs_parsed[0].length; itr++) {
-              conditional_count = conditional_count + X[j][inputs_parsed[0][itr]];
+              // conditional_count = conditional_count + X[j][inputs_parsed[0][itr]];
+              conditional_count = conditional_count + findWord(inputs_parsed[0][itr], tweets[j]);
+
             }
             if(input_type == "any") {
               if(conditional_count > 0) {
@@ -230,13 +242,13 @@
               }
             }
             else if(input_type == "all") {
-              if(conditional_count == inputs_parsed.length) {
+              if(conditional_count == inputs_parsed[0].length) {
                 count++;
               }
             }
           }
         }
-        quarterly_popularity.push(count/num_posts_in_quarter[i]);
+        quarterly_popularity.push(count/num_posts_in_month[i]);
       }
 
       all_queries_quarterly_popularities.push(quarterly_popularity);
@@ -285,25 +297,28 @@
       }
 
       var quarterly_popularity = [];
-      for(i=0; i<year_end_of_quarter_month.length; i++) {
+      for(i=0; i<year_month.length; i++) {
         count = 0;
-        for(j=quarter_indices[i]; j<quarter_indices[i+1]; j++) {
+        for(j=month_indices[i]; j<month_indices[i+1]; j++) {
           var count1 = 0, count2 = 0, count3 = 0, count4 = 0;
           // first any block
           for(itr=0; itr<inputs_parsed[0].length; itr++) {
-            count1 = count1 + X[j][inputs_parsed[0][itr]];
+            // count1 = count1 + X[j][inputs_parsed[0][itr]];
+            count1 = count1 + findWord(inputs_parsed[0][itr], tweets[j]);
           }
           // second any block
           for(itr=0; itr<inputs_parsed[1].length; itr++) {
-            count2 = count2 + X[j][inputs_parsed[1][itr]];
+            // count2 = count2 + X[j][inputs_parsed[1][itr]];
+            count2 = count2 + findWord(inputs_parsed[0][itr], tweets[j]);
           }
           // third any block
           for(itr=0; itr<inputs_parsed[2].length; itr++) {
-            count3 = count3 + X[j][inputs_parsed[2][itr]];
+            // count3 = count3 + X[j][inputs_parsed[2][itr]];
+            count3 = count3 + findWord(inputs_parsed[0][itr], tweets[j]);
           }
           // fourth any block
           for(itr=0; itr<inputs_parsed[3].length; itr++) {
-            count4 = count4 + X[j][inputs_parsed[3][itr]];
+            count4 = count4 + findWord(inputs_parsed[0][itr], tweets[j]);
           }
           input_1_satisfied = inputs_parsed[0].length ? (count1 > 0) : true;
           input_2_satisfied = inputs_parsed[1].length ? (count2 > 0) : true;
@@ -313,7 +328,7 @@
             count++;
           }
         }
-        quarterly_popularity.push(count/num_posts_in_quarter[i]);
+        quarterly_popularity.push(count/num_posts_in_month[i]);
       }
 
       all_queries_quarterly_popularities.push(quarterly_popularity);
@@ -329,7 +344,8 @@
     var is_topic_active = Array(40).fill(false);
     var dataNest;
 
-    d3.csv("pot_lda_quarterly_melted_no_labels.csv", function(error, data) {
+    // d3.csv("pot_lda_quarterly_melted.csv", function(error, data) {
+    d3.csv("pot_lda_monthly_melted.csv", function(error, data) {
         data.forEach(function(d) {
           d.date = parseDate(d.date);
           d.value = +d.value;
@@ -398,6 +414,10 @@
       d3.select("#topic_legend_"+String(i))
           .style("opacity", newOpacity);
       is_topic_active[i] = !is_topic_active[i];
+    }
+
+    function findWord(word, post) {
+      return post.split(' ').some(function(w){return w === word;});
     }
 
     d3.select("#yaxis_scale_input").on("input", function() {
