@@ -101,7 +101,7 @@
   <script>
     var width_lineplot_with_margins = 1230,
         height_lineplot_with_margins = 400,
-        margin = {top: 10, left: 35, right: 200, bottom: 20},
+        margin = {top: 10, left: 35, right: 250, bottom: 20},
         width_lineplot = width_lineplot_with_margins - margin.left - margin.right,
         height_lineplot = height_lineplot_with_margins - margin.top - margin.bottom;
 
@@ -143,18 +143,12 @@
       });
     });
 
-    // var X;
-    // d3.csv("X_binary.csv", function(error, data) {
-    //   X = data;
-    //   console.log("Ready");
-    // });
-
     var tweets = [];
     d3.csv("tweets.csv", function(error, data) {
       // posts = data;
       console.log("Ready");
       data.forEach(function(d, i) {
-        tweets.push(d.text.toLowerCase());
+        tweets.push(d.text.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,""));
       });
     });
 
@@ -219,6 +213,8 @@
         inputs_parsed.push(query.substring(4).split(','));
       }
 
+      console.log(inputs_parsed);
+
       var quarterly_popularity = [];
       for(i=0; i<year_month.length; i++) {
         count = 0;
@@ -234,7 +230,6 @@
             for(itr=0; itr<inputs_parsed[0].length; itr++) {
               // conditional_count = conditional_count + X[j][inputs_parsed[0][itr]];
               conditional_count = conditional_count + findWord(inputs_parsed[0][itr], tweets[j]);
-
             }
             if(input_type == "any") {
               if(conditional_count > 0) {
@@ -248,6 +243,7 @@
             }
           }
         }
+        // console.log(count);
         quarterly_popularity.push(count/num_posts_in_month[i]);
       }
 
@@ -289,7 +285,7 @@
       for(i=0;i<inputs.length;i++) {
         inputs_split = inputs[i].split(',');
         if(inputs_split[0] != "") {
-          inputs_parsed.push(inputs[i].split(','));
+          inputs_parsed.push(inputs_split);
         }
         else{
           inputs_parsed.push([]);
@@ -303,22 +299,19 @@
           var count1 = 0, count2 = 0, count3 = 0, count4 = 0;
           // first any block
           for(itr=0; itr<inputs_parsed[0].length; itr++) {
-            // count1 = count1 + X[j][inputs_parsed[0][itr]];
             count1 = count1 + findWord(inputs_parsed[0][itr], tweets[j]);
           }
           // second any block
           for(itr=0; itr<inputs_parsed[1].length; itr++) {
-            // count2 = count2 + X[j][inputs_parsed[1][itr]];
-            count2 = count2 + findWord(inputs_parsed[0][itr], tweets[j]);
+            count2 = count2 + findWord(inputs_parsed[1][itr], tweets[j]);
           }
           // third any block
           for(itr=0; itr<inputs_parsed[2].length; itr++) {
-            // count3 = count3 + X[j][inputs_parsed[2][itr]];
-            count3 = count3 + findWord(inputs_parsed[0][itr], tweets[j]);
+            count3 = count3 + findWord(inputs_parsed[2][itr], tweets[j]);
           }
           // fourth any block
           for(itr=0; itr<inputs_parsed[3].length; itr++) {
-            count4 = count4 + findWord(inputs_parsed[0][itr], tweets[j]);
+            count4 = count4 + findWord(inputs_parsed[3][itr], tweets[j]);
           }
           input_1_satisfied = inputs_parsed[0].length ? (count1 > 0) : true;
           input_2_satisfied = inputs_parsed[1].length ? (count2 > 0) : true;
